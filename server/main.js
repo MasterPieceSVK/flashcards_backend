@@ -16,4 +16,9 @@ apiRouter.use("/login", loginRouter);
 const signUpRouter = require("./signup");
 apiRouter.use("/signup", signUpRouter);
 
+const authRouter = require("./auth");
+apiRouter.use("/users", authRouter);
+
+const dashboardRouter = require("./dashboard");
+apiRouter.use("/dashboard", dashboardRouter);
 module.exports = apiRouter;

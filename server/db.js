@@ -2,7 +2,7 @@ require("dotenv").config({
   path: ".env",
 });
 
-const { ParameterizedQuery } = require("pg-promise");
+const { ParameterizedQuery, as } = require("pg-promise");
 const pgp = require("pg-promise")();
 const db = pgp(process.env.DATABASE_URL);
 
@@ -40,4 +40,36 @@ async function findUser(username) {
     });
 }
 
-module.exports = { createUser, findUser };
+async function getIdByUsername(username) {
+  const findId = new ParameterizedQuery({
+    text: "SELECT user_id FROM users WHERE username = $1",
+    values: [username],
+  });
+  return db
+    .one(findId)
+    .then((id) => {
+      return id.user_id;
+    })
+    .catch((e) => {
+      console.log(e);
+    });
+}
+
+async function getFlashcardSets(username) {
+  const id = await getIdByUsername(username);
+  const findSets = new ParameterizedQuery({
+    text: "SELECT * FROM flashcard_sets WHERE user_id = $1",
+    values: [id],
+  });
+
+  return db
+    .many(findSets)
+    .then((sets) => {
+      return sets;
+    })
+    .catch((e) => {
+      console.log(e);
+    });
+}
+
+module.exports = { createUser, findUser, getFlashcardSets, getIdByUsername };
