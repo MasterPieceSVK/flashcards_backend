@@ -24,4 +24,8 @@ apiRouter.use("/dashboard", dashboardRouter);
 
 const setsRouter = require("./sets");
 apiRouter.use("/sets", setsRouter);
+
+const qaRouter = require("./qa");
+apiRouter.use("/qa", qaRouter);
+
 module.exports = apiRouter;

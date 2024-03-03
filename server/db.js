@@ -114,11 +114,12 @@ async function createSet(set_name, username, qa, public) {
         answer: item.answer,
         created_at,
         is_public: public,
+        user_id: id,
       };
     });
 
     let cs = new pgp.helpers.ColumnSet(
-      ["set_id", "question", "answer", "created_at", "is_public"],
+      ["set_id", "question", "answer", "created_at", "is_public", "user_id"],
       {
         table: "flashcards",
       }
@@ -136,10 +137,51 @@ async function createSet(set_name, username, qa, public) {
   }
 }
 
+async function getQA(setId, id) {
+  console.log("set id " + setId);
+
+  const publicPrivate = new ParameterizedQuery({
+    text: "SELECT is_public FROM flashcard_sets WHERE set_id = $1",
+    values: [setId],
+  });
+  const { is_public } = await db
+    .one(publicPrivate)
+    .then((set) => {
+      return set;
+    })
+    .catch((e) => {
+      console.log(e);
+    });
+  console.log(is_public);
+
+  let findQA = "";
+  if (is_public) {
+    findQA = new ParameterizedQuery({
+      text: "SELECT question,answer FROM flashcards WHERE set_id = $1",
+      values: [setId],
+    });
+  } else {
+    findQA = new ParameterizedQuery({
+      text: "SELECT question,answer FROM flashcards WHERE set_id = $1 AND user_id=$2",
+      values: [setId, id],
+    });
+  }
+
+  return db
+    .many(findQA)
+    .then((qa) => {
+      return qa;
+    })
+    .catch((e) => {
+      console.log(e);
+    });
+}
+
 module.exports = {
   createUser,
   findUser,
   getFlashcardSets,
   getIdByUsername,
   createSet,
+  getQA,
 };

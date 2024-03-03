@@ -9,7 +9,7 @@ dashboardRouter.post("/", async (req, res) => {
   const searchForSets = req.body.sets;
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
-  console.log(token);
+  // console.log(token);
   if (!token) {
     return res.status(401).json({ message: "No token provided" });
   }
@@ -18,7 +18,7 @@ dashboardRouter.post("/", async (req, res) => {
     if (err) {
       return res.status(403).json({ message: "Invalid token" });
     }
-    console.log(req.body);
+    // console.log(req.body);
     if (searchForSets) {
       const sets = (await getFlashcardSets(decoded.username)) || [];
       res.json({ username: decoded.username, sets });
