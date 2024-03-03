@@ -21,4 +21,7 @@ apiRouter.use("/users", authRouter);
 
 const dashboardRouter = require("./dashboard");
 apiRouter.use("/dashboard", dashboardRouter);
+
+const setsRouter = require("./sets");
+apiRouter.use("/sets", setsRouter);
 module.exports = apiRouter;

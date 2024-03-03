@@ -6,6 +6,7 @@ require("dotenv").config({
   path: ".env",
 });
 dashboardRouter.post("/", async (req, res) => {
+  const searchForSets = req.body.sets;
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   console.log(token);
@@ -17,11 +18,15 @@ dashboardRouter.post("/", async (req, res) => {
     if (err) {
       return res.status(403).json({ message: "Invalid token" });
     }
-
-    const sets = (await getFlashcardSets(decoded.username)) || [];
+    console.log(req.body);
+    if (searchForSets) {
+      const sets = (await getFlashcardSets(decoded.username)) || [];
+      res.json({ username: decoded.username, sets });
+    } else {
+      res.json({ username: decoded.username });
+    }
 
     // User is the "right" user, proceed with handling the request
-    res.json(sets);
   });
 });
 

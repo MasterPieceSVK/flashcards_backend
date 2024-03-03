@@ -72,4 +72,74 @@ async function getFlashcardSets(username) {
     });
 }
 
-module.exports = { createUser, findUser, getFlashcardSets, getIdByUsername };
+async function createSet(set_name, username, qa, public) {
+  const created_at = new Date().toISOString();
+  const id = await getIdByUsername(username);
+  data = [
+    { user_id: id, set_name, created_at, likes_count: 0, is_public: public },
+  ];
+
+  let cs = new pgp.helpers.ColumnSet(
+    ["user_id", "set_name", "created_at", "likes_count", "is_public"],
+    {
+      table: "flashcard_sets",
+    }
+  );
+  let sql = pgp.helpers.insert(data, cs);
+  const create = await db
+    .none(sql)
+    .then(() => {
+      return true;
+    })
+    .catch((err) => {
+      console.log(err);
+      return false;
+    });
+  if (create) {
+    const findSetId = new ParameterizedQuery({
+      text: "SELECT set_id FROM flashcard_sets WHERE user_id = $1 AND created_at=$2",
+      values: [id, created_at],
+    });
+    const setId = await db
+      .one(findSetId)
+      .then((data) => {
+        return data.set_id;
+      })
+      .catch((e) => console.log(e));
+
+    let formattedData = qa.map((item) => {
+      return {
+        set_id: setId,
+        question: item.question,
+        answer: item.answer,
+        created_at,
+        is_public: public,
+      };
+    });
+
+    let cs = new pgp.helpers.ColumnSet(
+      ["set_id", "question", "answer", "created_at", "is_public"],
+      {
+        table: "flashcards",
+      }
+    );
+
+    let sql = pgp.helpers.insert(formattedData, cs);
+
+    db.none(sql)
+      .then((data) => console.log(data))
+      .catch((e) => {
+        console.log(e);
+      });
+  } else {
+    res.status(500).send("An eror occured");
+  }
+}
+
+module.exports = {
+  createUser,
+  findUser,
+  getFlashcardSets,
+  getIdByUsername,
+  createSet,
+};

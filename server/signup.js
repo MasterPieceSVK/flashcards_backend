@@ -10,7 +10,7 @@ require("dotenv").config({
 });
 
 signUpRouter.post("/", async (req, res) => {
-  console.log(req.body);
+  // console.log(req.body);
   const { username, password, email } = req.body;
 
   if (
@@ -23,13 +23,9 @@ signUpRouter.post("/", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
     console.log("signup");
     const response = await createUser(username, hashedPassword, email);
-    console.log(response);
 
     if (response) {
-      const token = jwt.sign(
-        { username: response.username },
-        process.env.SECRETKEY
-      );
+      const token = jwt.sign({ username }, process.env.SECRETKEY);
       res.json({ token, username });
     } else {
       res.status(409).send("username or email does already exist");

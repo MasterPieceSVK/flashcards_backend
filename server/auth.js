@@ -7,7 +7,6 @@ require("dotenv").config({
 authRouter.post("/:user", (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
-
   if (!token) {
     return res.status(401).json({ message: "No token provided" });
   }
@@ -24,7 +23,7 @@ authRouter.post("/:user", (req, res) => {
       });
     }
     // User is the "right" user, proceed with handling the request
-    res.json({ message: "Access granted" });
+    res.json({ username: req.params.user });
   });
 });
 
