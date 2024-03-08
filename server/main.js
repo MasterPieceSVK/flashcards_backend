@@ -28,4 +28,7 @@ apiRouter.use("/sets", setsRouter);
 const qaRouter = require("./qa");
 apiRouter.use("/qa", qaRouter);
 
+const saveResultRouter = require("./saveResults");
+apiRouter.use("/save-result", saveResultRouter);
+
 module.exports = apiRouter;

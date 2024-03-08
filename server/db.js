@@ -3,6 +3,7 @@ require("dotenv").config({
 });
 
 const { ParameterizedQuery, as } = require("pg-promise");
+const getUsernameByToken = require("./getUsernameByToken");
 const pgp = require("pg-promise")();
 const db = pgp(process.env.DATABASE_URL);
 
@@ -177,6 +178,33 @@ async function getQA(setId, id) {
     });
 }
 
+async function saveResult(token, right, wrong, set_id) {
+  const username = await getUsernameByToken(token);
+
+  const user_id = await getIdByUsername(username);
+
+  const data = {
+    set_id,
+    right,
+    wrong,
+    user_id,
+  };
+  let cs = new pgp.helpers.ColumnSet(["set_id", "right", "wrong", "user_id"], {
+    table: "results",
+  });
+
+  let sql = pgp.helpers.insert(data, cs);
+  return db
+    .none(sql)
+    .then(() => {
+      return true;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
 module.exports = {
   createUser,
   findUser,
@@ -184,4 +212,5 @@ module.exports = {
   getIdByUsername,
   createSet,
   getQA,
+  saveResult,
 };
