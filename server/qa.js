@@ -11,6 +11,7 @@ qaRouter.post("/:setId", async (req, res) => {
   const userId = await getIdByUsername(username);
   const { setId } = req.params;
   const response = await getQA(setId, userId);
+  console.log("response comming");
   console.log(response);
   res.json(response);
 });

@@ -11,18 +11,23 @@ dashboardRouter.post("/", async (req, res) => {
   const token = authHeader && authHeader.split(" ")[1];
   // console.log(token);
   if (!token) {
+    console.log("no token");
     return res.status(401).json({ message: "No token provided" });
   }
 
   jwt.verify(token, process.env.SECRETKEY, async (err, decoded) => {
     if (err) {
+      console.log("invalid token");
+
       return res.status(403).json({ message: "Invalid token" });
     }
     // console.log(req.body);
     if (searchForSets) {
+      console.log("search for sets");
       const sets = (await getFlashcardSets(decoded.username)) || [];
       res.json({ username: decoded.username, sets });
     } else {
+      console.log("success");
       res.json({ username: decoded.username });
     }
 
