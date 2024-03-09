@@ -31,4 +31,7 @@ apiRouter.use("/qa", qaRouter);
 const saveResultRouter = require("./saveResults");
 apiRouter.use("/save-result", saveResultRouter);
 
+const likeRouter = require("./like");
+apiRouter.use("/like", likeRouter);
+
 module.exports = apiRouter;

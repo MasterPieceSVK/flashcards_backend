@@ -59,7 +59,7 @@ async function getIdByUsername(username) {
 async function getFlashcardSets(username) {
   const id = await getIdByUsername(username);
   const findSets = new ParameterizedQuery({
-    text: "SELECT * FROM flashcard_sets WHERE user_id = $1",
+    text: "SELECT * FROM flashcard_sets WHERE user_id = $1 ORDER BY created_at DESC",
     values: [id],
   });
 
@@ -165,19 +165,31 @@ async function getQA(setId, id) {
       values: [setId, id],
     });
   }
+  const resultsQuery = new ParameterizedQuery({
+    text: "SELECT wrong_answers,right_answers FROM results WHERE set_id = $1 AND user_id=$2 ORDER BY result_id DESC",
+    values: [setId, id],
+  });
 
+  const isSetLiked = await isLiked(id, setId);
+
+  const allResults = await db
+    .many(resultsQuery)
+    .then((results) => results)
+    .catch((e) => console.log(e));
   return db
     .many(findQA)
     .then(async (qa) => {
       console.log(qa);
       const { username } = await getUsernameById(user_id);
       const resp = {
+        allResults,
         qa,
         is_public,
         likes_count,
         username,
         created_at,
         set_name,
+        liked: isSetLiked,
       };
       return resp;
     })
@@ -193,13 +205,16 @@ async function saveResult(token, right, wrong, set_id) {
 
   const data = {
     set_id,
-    right,
-    wrong,
+    right_answers: right,
+    wrong_answers: wrong,
     user_id,
   };
-  let cs = new pgp.helpers.ColumnSet(["set_id", "right", "wrong", "user_id"], {
-    table: "results",
-  });
+  let cs = new pgp.helpers.ColumnSet(
+    ["set_id", "right_answers", "wrong_answers", "user_id"],
+    {
+      table: "results",
+    }
+  );
 
   let sql = pgp.helpers.insert(data, cs);
   return db
@@ -228,6 +243,59 @@ async function getUsernameById(id) {
     });
 }
 
+async function addLike(user_id, set_id) {
+  const data = {
+    set_id,
+    user_id,
+  };
+  let cs = new pgp.helpers.ColumnSet(["set_id", "user_id"], {
+    table: "likes",
+  });
+
+  let sql = pgp.helpers.insert(data, cs);
+  return db
+    .none(sql)
+    .then(() => {
+      return true;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
+async function removeLike(user_id, set_id) {
+  const removeLike = new ParameterizedQuery({
+    text: "DELETE FROM likes WHERE user_id = $1 AND set_id=$2",
+    values: [user_id, set_id],
+  });
+  return db
+    .none(removeLike)
+    .then(() => {
+      return true;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
+async function isLiked(user_id, set_id) {
+  const isLikedQuery = new ParameterizedQuery({
+    text: "SELECT like_id FROM likes WHERE user_id=$1 AND set_id=$2",
+    values: [user_id, set_id],
+  });
+  return db
+    .one(isLikedQuery)
+    .then(() => {
+      return true;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
 module.exports = {
   createUser,
   findUser,
@@ -237,4 +305,6 @@ module.exports = {
   getQA,
   saveResult,
   getUsernameById,
+  addLike,
+  removeLike,
 };
