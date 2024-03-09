@@ -296,6 +296,97 @@ async function isLiked(user_id, set_id) {
     });
 }
 
+async function getPublicSets() {
+  const getPublicSetsQuery = new ParameterizedQuery({
+    text: "SELECT flashcard_sets.*, users.username FROM flashcard_sets JOIN users ON flashcard_sets.user_id = users.user_id WHERE is_public=$1 ORDER BY created_at DESC LIMIT 20",
+    values: [true],
+  });
+  return db
+    .many(getPublicSetsQuery)
+    .then((data) => {
+      return data;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
+async function getMostLikedPublicSets() {
+  const getPublicSetsQuery = new ParameterizedQuery({
+    text: "SELECT flashcard_sets.*, users.username FROM flashcard_sets JOIN users ON flashcard_sets.user_id = users.user_id WHERE is_public=$1 ORDER BY likes_count DESC LIMIT 20",
+    values: [true],
+  });
+  return db
+    .many(getPublicSetsQuery)
+    .then((data) => {
+      return data;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
+async function getUserInfo(user_id, username) {
+  const emailQuery = new ParameterizedQuery({
+    text: "SELECT email FROM users WHERE user_id=$1",
+    values: [user_id],
+  });
+  const [{ email }] = await db
+    .many(emailQuery)
+    .then((data) => {
+      console.log(data);
+      return data;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+
+  const setCountQuery = new ParameterizedQuery({
+    text: "SELECT COUNT(*) FROM flashcard_sets WHERE user_id=$1 UNION SELECT COUNT(*) FROM results WHERE user_id=$1 UNION SELECT COUNT(*) FROM flashcards WHERE user_id=$1 UNION SELECT COUNT(*) FROM likes WHERE user_id=$1",
+    values: [user_id],
+  });
+  const setCount = await db
+    .many(setCountQuery)
+    .then((data) => {
+      console.log(data);
+      return data;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+
+  const sumCountQuery = new ParameterizedQuery({
+    text: "SELECT SUM(likes_count) FROM flashcard_sets WHERE user_id=$1",
+    values: [user_id],
+  });
+  const sumCount = await db
+    .many(sumCountQuery)
+    .then((data) => {
+      console.log(data);
+      return data;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+  console.log(username);
+  const obj = {
+    email,
+    username,
+    setCount: setCount[0].count,
+    playCount: setCount[1].count,
+    questionCount: setCount[2].count,
+    likedSetsCount: setCount[3].count,
+    sumLikesCount: sumCount[0].sum,
+  };
+
+  return obj;
+}
+
 module.exports = {
   createUser,
   findUser,
@@ -307,4 +398,7 @@ module.exports = {
   getUsernameById,
   addLike,
   removeLike,
+  getPublicSets,
+  getMostLikedPublicSets,
+  getUserInfo,
 };

@@ -34,4 +34,10 @@ apiRouter.use("/save-result", saveResultRouter);
 const likeRouter = require("./like");
 apiRouter.use("/like", likeRouter);
 
+const getPublicSetsRouter = require("./getPublicSets");
+apiRouter.use("/getPublicSets", getPublicSetsRouter);
+
+const userInfoRouter = require("./userInfo");
+apiRouter.use("/userInfo", userInfoRouter);
+
 module.exports = apiRouter;
