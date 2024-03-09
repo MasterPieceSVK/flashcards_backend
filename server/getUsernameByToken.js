@@ -7,10 +7,11 @@ function getUsernameByToken(token) {
   return jwt.verify(token, process.env.SECRETKEY, async (err, decoded) => {
     if (err) {
       return false;
-    }
-    const username = decoded.username;
+    } else {
+      const username = decoded.username;
 
-    return username;
+      return username;
+    }
   });
 }
 

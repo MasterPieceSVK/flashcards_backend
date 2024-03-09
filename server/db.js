@@ -139,13 +139,11 @@ async function createSet(set_name, username, qa, public) {
 }
 
 async function getQA(setId, id) {
-  console.log("set id " + setId);
-
   const publicPrivate = new ParameterizedQuery({
-    text: "SELECT is_public FROM flashcard_sets WHERE set_id = $1",
+    text: "SELECT is_public,likes_count,user_id,created_at,set_name FROM flashcard_sets WHERE set_id = $1",
     values: [setId],
   });
-  const { is_public } = await db
+  const { is_public, likes_count, created_at, user_id, set_name } = await db
     .one(publicPrivate)
     .then((set) => {
       return set;
@@ -153,7 +151,7 @@ async function getQA(setId, id) {
     .catch((e) => {
       console.log(e);
     });
-  console.log(is_public);
+  console.log("is public? " + is_public);
 
   let findQA = "";
   if (is_public) {
@@ -170,8 +168,18 @@ async function getQA(setId, id) {
 
   return db
     .many(findQA)
-    .then((qa) => {
-      return qa;
+    .then(async (qa) => {
+      console.log(qa);
+      const { username } = await getUsernameById(user_id);
+      const resp = {
+        qa,
+        is_public,
+        likes_count,
+        username,
+        created_at,
+        set_name,
+      };
+      return resp;
     })
     .catch((e) => {
       console.log(e);
@@ -205,6 +213,21 @@ async function saveResult(token, right, wrong, set_id) {
     });
 }
 
+async function getUsernameById(id) {
+  const findUser = new ParameterizedQuery({
+    text: "SELECT username FROM users WHERE user_id = $1",
+    values: [id],
+  });
+  return db
+    .one(findUser)
+    .then((username) => {
+      return username;
+    })
+    .catch((e) => {
+      console.log(e);
+    });
+}
+
 module.exports = {
   createUser,
   findUser,
@@ -213,4 +236,5 @@ module.exports = {
   createSet,
   getQA,
   saveResult,
+  getUsernameById,
 };
