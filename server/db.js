@@ -1,6 +1,7 @@
 require("dotenv").config({
   path: ".env",
 });
+const bcrypt = require("bcrypt");
 
 const { ParameterizedQuery, as } = require("pg-promise");
 const getUsernameByToken = require("./getUsernameByToken");
@@ -345,59 +346,64 @@ async function getMostLikedPublicSets() {
 }
 
 async function getUserInfo(user_id, username) {
-  const emailQuery = new ParameterizedQuery({
-    text: "SELECT email FROM users WHERE user_id=$1",
-    values: [user_id],
-  });
-  const [{ email }] = await db
-    .many(emailQuery)
-    .then((data) => {
-      return data;
-    })
-    .catch((e) => {
-      console.log(e);
-      return false;
+  const exists = await userExists(user_id);
+  if (exists) {
+    const emailQuery = new ParameterizedQuery({
+      text: "SELECT email FROM users WHERE user_id=$1",
+      values: [user_id],
+    });
+    const [{ email }] = await db
+      .many(emailQuery)
+      .then((data) => {
+        return data;
+      })
+      .catch((e) => {
+        console.log(e);
+        return false;
+      });
+
+    const setCountQuery = new ParameterizedQuery({
+      text: "SELECT COUNT(*) FROM flashcard_sets WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM results WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM flashcards WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM likes WHERE user_id=$1",
+      values: [user_id],
     });
 
-  const setCountQuery = new ParameterizedQuery({
-    text: "SELECT COUNT(*) FROM flashcard_sets WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM results WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM flashcards WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM likes WHERE user_id=$1",
-    values: [user_id],
-  });
+    const setCount = await db
+      .many(setCountQuery)
+      .then((data) => {
+        return data;
+      })
+      .catch((e) => {
+        console.log(e);
+        return false;
+      });
 
-  const setCount = await db
-    .many(setCountQuery)
-    .then((data) => {
-      return data;
-    })
-    .catch((e) => {
-      console.log(e);
-      return false;
+    const sumCountQuery = new ParameterizedQuery({
+      text: "SELECT SUM(likes_count) FROM flashcard_sets WHERE user_id=$1",
+      values: [user_id],
     });
+    const sumCount = await db
+      .many(sumCountQuery)
+      .then((data) => {
+        return data;
+      })
+      .catch((e) => {
+        console.log(e);
+        return false;
+      });
+    const obj = {
+      email,
+      username,
+      createdSetsCount: setCount[0]?.count || 0,
+      playedSetsCount: setCount[1]?.count || 0,
+      createdQuestionsCount: setCount[2]?.count || 0,
+      likedSetsCount: setCount[3]?.count || 0,
+      gottenLikesOnSetsCount: sumCount[0]?.sum || 0,
+    };
 
-  const sumCountQuery = new ParameterizedQuery({
-    text: "SELECT SUM(likes_count) FROM flashcard_sets WHERE user_id=$1",
-    values: [user_id],
-  });
-  const sumCount = await db
-    .many(sumCountQuery)
-    .then((data) => {
-      return data;
-    })
-    .catch((e) => {
-      console.log(e);
-      return false;
-    });
-  const obj = {
-    email,
-    username,
-    createdSetsCount: setCount[0]?.count || 0,
-    playedSetsCount: setCount[1]?.count || 0,
-    createdQuestionsCount: setCount[2]?.count || 0,
-    likedSetsCount: setCount[3]?.count || 0,
-    gottenLikesOnSetsCount: sumCount[0]?.sum || 0,
-  };
-
-  return obj;
+    return obj;
+  } else {
+    return false;
+  }
 }
 
 async function getOwnerOfSet(set_id) {
@@ -469,6 +475,176 @@ async function deleteSet(set_id) {
     });
 }
 
+async function changeUsername(newUsername, oldUsername) {
+  console.log("old username " + oldUsername);
+  const oldUsernameExistsQuery = new ParameterizedQuery({
+    text: "SELECT EXISTS(SELECT * FROM users WHERE username=$1)",
+    values: [oldUsername],
+  });
+
+  const { exists } = await db
+    .one(oldUsernameExistsQuery)
+    .then((data) => {
+      return data;
+    })
+    .catch((e) => console.log(e));
+  if (exists) {
+    const oldUsernameExistsQuery = new ParameterizedQuery({
+      text: "SELECT EXISTS(SELECT * FROM users WHERE username=$1)",
+      values: [newUsername],
+    });
+
+    let newUsernameExists = await db
+      .one(oldUsernameExistsQuery)
+      .then((data) => {
+        return data.exists;
+      })
+      .catch((e) => console.log(e));
+    console.log("exists? " + newUsernameExists);
+
+    if (!newUsernameExists) {
+      console.log("changing");
+      const changeUsernameQuery = new ParameterizedQuery({
+        text: "UPDATE users SET username=$1 WHERE username=$2",
+        values: [newUsername, oldUsername],
+      });
+
+      return db
+        .none(changeUsernameQuery)
+        .then(() => {
+          return true;
+        })
+        .catch((e) => {
+          console.log(e);
+          return false;
+        });
+    } else {
+      return false;
+    }
+  }
+  return false;
+}
+
+async function changeEmail(oldEmail, newEmail) {
+  const usernameExistsQuery = new ParameterizedQuery({
+    text: "SELECT EXISTS(SELECT * FROM users WHERE email=$1)",
+    values: [newEmail],
+  });
+
+  const { exists } = await db
+    .one(usernameExistsQuery)
+    .then((data) => {
+      return data;
+    })
+    .catch((e) => console.log(e));
+  if (!exists) {
+    const changeEmailQuery = new ParameterizedQuery({
+      text: "UPDATE users SET email=$1 WHERE email=$2",
+      values: [newEmail, oldEmail],
+    });
+
+    return db
+      .none(changeEmailQuery)
+      .then(() => {
+        return true;
+      })
+      .catch((e) => {
+        console.log(e);
+        return false;
+      });
+  } else {
+    return false;
+  }
+}
+
+async function changePassword(oldPassword, newPassword, username) {
+  const saltRounds = 10;
+  const salt = await bcrypt.genSalt(saltRounds);
+  const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+  const changePasswordQuery = new ParameterizedQuery({
+    text: "UPDATE users SET password=$1 WHERE username=$2",
+    values: [hashedPassword, username],
+  });
+
+  return db
+    .none(changePasswordQuery)
+    .then(() => {
+      return true;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
+async function userExists(user_id) {
+  const existsQuery = new ParameterizedQuery({
+    text: "SELECT EXISTS(SELECT * FROM users WHERE user_id=$1)",
+    values: [user_id],
+  });
+
+  return db
+    .one(existsQuery)
+    .then((data) => {
+      return data.exists;
+    })
+    .catch((e) => console.log(e));
+}
+
+async function findUserByEmail(email) {
+  const emailQuery = new ParameterizedQuery({
+    text: "SELECT * FROM users WHERE email=$1",
+    values: [email],
+  });
+
+  return db
+    .one(emailQuery)
+    .then((data) => {
+      return data;
+    })
+    .catch((e) => console.log(e));
+}
+
+async function deleteAccount(user_id) {
+  const deleteLikesQuery = new ParameterizedQuery({
+    text: "DELETE FROM likes WHERE user_id=$1 OR set_id IN (SELECT set_id FROM flashcard_sets WHERE user_id=$1)",
+    values: [user_id],
+  });
+
+  const deleteResultsQuery = new ParameterizedQuery({
+    text: "DELETE FROM results WHERE user_id=$1",
+    values: [user_id],
+  });
+
+  const deleteCardsQuery = new ParameterizedQuery({
+    text: "DELETE FROM flashcards WHERE set_id IN (SELECT set_id FROM flashcard_sets WHERE user_id=$1)",
+    values: [user_id],
+  });
+
+  const deleteSetQuery = new ParameterizedQuery({
+    text: "DELETE FROM flashcard_sets WHERE user_id=$1",
+    values: [user_id],
+  });
+
+  const deleteAccountQuery = new ParameterizedQuery({
+    text: "DELETE FROM users WHERE user_id=$1",
+    values: [user_id],
+  });
+
+  try {
+    await db.none(deleteLikesQuery);
+    await db.none(deleteResultsQuery);
+    await db.none(deleteCardsQuery);
+    await db.none(deleteSetQuery);
+    await db.none(deleteAccountQuery);
+    return true;
+  } catch (e) {
+    console.log(e);
+    return false;
+  }
+}
+
 module.exports = {
   createUser,
   findUser,
@@ -485,4 +661,10 @@ module.exports = {
   getUserInfo,
   getOwnerOfSet,
   deleteSet,
+  changeUsername,
+  userExists,
+  findUserByEmail,
+  changeEmail,
+  changePassword,
+  deleteAccount,
 };

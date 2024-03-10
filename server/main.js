@@ -40,4 +40,9 @@ apiRouter.use("/getPublicSets", getPublicSetsRouter);
 const userInfoRouter = require("./userInfo");
 apiRouter.use("/userInfo", userInfoRouter);
 
+const accountRouter = require("./account");
+apiRouter.use("/account", accountRouter);
+
+const getUsernameRouter = require("./getUsername");
+apiRouter.use("/getUsername", getUsernameRouter);
 module.exports = apiRouter;
