@@ -13,8 +13,11 @@ qaRouter.post("/:setId", async (req, res) => {
     const userId = await getIdByUsername(username);
     const { setId } = req.params;
     const response = await getQA(setId, userId);
-    console.log("response comming");
-    res.json(response);
+    if (response) {
+      res.json(response);
+    } else {
+      res.status(404).send("set not found");
+    }
   } else {
     console.log("error 1234");
     res.status(404).send("error 1234");

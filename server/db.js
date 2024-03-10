@@ -29,7 +29,6 @@ async function findUser(username) {
     text: "SELECT * FROM users WHERE username = $1",
     values: [username],
   });
-  console.log(username);
   return db
     .one(findUser)
     .then((user) => {
@@ -129,7 +128,7 @@ async function createSet(set_name, username, qa, public) {
     let sql = pgp.helpers.insert(formattedData, cs);
 
     db.none(sql)
-      .then((data) => console.log(data))
+      // .then((data) => console.log(data))
       .catch((e) => {
         console.log(e);
       });
@@ -139,63 +138,80 @@ async function createSet(set_name, username, qa, public) {
 }
 
 async function getQA(setId, id) {
-  const publicPrivate = new ParameterizedQuery({
-    text: "SELECT is_public,likes_count,user_id,created_at,set_name FROM flashcard_sets WHERE set_id = $1",
+  const setExists = new ParameterizedQuery({
+    text: "SELECT EXISTS(SELECT * FROM flashcard_sets WHERE set_id=$1 )",
     values: [setId],
   });
-  const { is_public, likes_count, created_at, user_id, set_name } = await db
-    .one(publicPrivate)
-    .then((set) => {
-      return set;
+
+  const { exists } = await db
+    .one(setExists)
+    .then((data) => {
+      return data;
     })
     .catch((e) => {
       console.log(e);
+      return false;
     });
-  console.log("is public? " + is_public);
-
-  let findQA = "";
-  if (is_public) {
-    findQA = new ParameterizedQuery({
-      text: "SELECT question,answer FROM flashcards WHERE set_id = $1",
+  if (exists) {
+    const publicPrivate = new ParameterizedQuery({
+      text: "SELECT is_public,likes_count,user_id,created_at,set_name FROM flashcard_sets WHERE set_id = $1",
       values: [setId],
     });
-  } else {
-    findQA = new ParameterizedQuery({
-      text: "SELECT question,answer FROM flashcards WHERE set_id = $1 AND user_id=$2",
+    const { is_public, likes_count, created_at, user_id, set_name } = await db
+      .one(publicPrivate)
+      .then((set) => {
+        return set;
+      })
+      .catch((e) => {
+        console.log(e);
+      });
+
+    let findQA = "";
+    if (is_public) {
+      findQA = new ParameterizedQuery({
+        text: "SELECT question,answer FROM flashcards WHERE set_id = $1",
+        values: [setId],
+      });
+    } else {
+      findQA = new ParameterizedQuery({
+        text: "SELECT question,answer FROM flashcards WHERE set_id = $1 AND user_id=$2",
+        values: [setId, id],
+      });
+    }
+    const resultsQuery = new ParameterizedQuery({
+      text: "SELECT wrong_answers,right_answers FROM results WHERE set_id = $1 AND user_id=$2 ORDER BY result_id DESC",
       values: [setId, id],
     });
+
+    const isSetLiked = await isLiked(id, setId);
+
+    const allResults = await db
+      .many(resultsQuery)
+      .then((results) => results)
+      .catch((e) => console.log(e));
+    return db
+      .many(findQA)
+      .then(async (qa) => {
+        console.log(qa);
+        const { username } = await getUsernameById(user_id);
+        const resp = {
+          allResults,
+          qa,
+          is_public,
+          likes_count,
+          username,
+          created_at,
+          set_name,
+          liked: isSetLiked,
+        };
+        return resp;
+      })
+      .catch((e) => {
+        console.log(e);
+      });
+  } else {
+    return false;
   }
-  const resultsQuery = new ParameterizedQuery({
-    text: "SELECT wrong_answers,right_answers FROM results WHERE set_id = $1 AND user_id=$2 ORDER BY result_id DESC",
-    values: [setId, id],
-  });
-
-  const isSetLiked = await isLiked(id, setId);
-
-  const allResults = await db
-    .many(resultsQuery)
-    .then((results) => results)
-    .catch((e) => console.log(e));
-  return db
-    .many(findQA)
-    .then(async (qa) => {
-      console.log(qa);
-      const { username } = await getUsernameById(user_id);
-      const resp = {
-        allResults,
-        qa,
-        is_public,
-        likes_count,
-        username,
-        created_at,
-        set_name,
-        liked: isSetLiked,
-      };
-      return resp;
-    })
-    .catch((e) => {
-      console.log(e);
-    });
 }
 
 async function saveResult(token, right, wrong, set_id) {
@@ -336,7 +352,6 @@ async function getUserInfo(user_id, username) {
   const [{ email }] = await db
     .many(emailQuery)
     .then((data) => {
-      console.log(data);
       return data;
     })
     .catch((e) => {
@@ -345,13 +360,13 @@ async function getUserInfo(user_id, username) {
     });
 
   const setCountQuery = new ParameterizedQuery({
-    text: "SELECT COUNT(*) FROM flashcard_sets WHERE user_id=$1 UNION SELECT COUNT(*) FROM results WHERE user_id=$1 UNION SELECT COUNT(*) FROM flashcards WHERE user_id=$1 UNION SELECT COUNT(*) FROM likes WHERE user_id=$1",
+    text: "SELECT COUNT(*) FROM flashcard_sets WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM results WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM flashcards WHERE user_id=$1 UNION ALL SELECT COUNT(*) FROM likes WHERE user_id=$1",
     values: [user_id],
   });
+
   const setCount = await db
     .many(setCountQuery)
     .then((data) => {
-      console.log(data);
       return data;
     })
     .catch((e) => {
@@ -366,25 +381,92 @@ async function getUserInfo(user_id, username) {
   const sumCount = await db
     .many(sumCountQuery)
     .then((data) => {
-      console.log(data);
       return data;
     })
     .catch((e) => {
       console.log(e);
       return false;
     });
-  console.log(username);
   const obj = {
     email,
     username,
-    setCount: setCount[0].count,
-    playCount: setCount[1].count,
-    questionCount: setCount[2].count,
-    likedSetsCount: setCount[3].count,
-    sumLikesCount: sumCount[0].sum,
+    createdSetsCount: setCount[0]?.count || 0,
+    playedSetsCount: setCount[1]?.count || 0,
+    createdQuestionsCount: setCount[2]?.count || 0,
+    likedSetsCount: setCount[3]?.count || 0,
+    gottenLikesOnSetsCount: sumCount[0]?.sum || 0,
   };
 
   return obj;
+}
+
+async function getOwnerOfSet(set_id) {
+  const getOwnerQuery = new ParameterizedQuery({
+    text: "SELECT user_id FROM flashcard_sets WHERE set_id=$1",
+    values: [set_id],
+  });
+
+  return db
+    .one(getOwnerQuery)
+    .then((data) => {
+      return data.user_id;
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
+}
+
+async function deleteSet(set_id) {
+  const deleteSetQuery = new ParameterizedQuery({
+    text: "DELETE FROM flashcard_sets WHERE set_id=$1",
+    values: [set_id],
+  });
+
+  const deleteCardsQuery = new ParameterizedQuery({
+    text: "DELETE FROM flashcards WHERE set_id=$1",
+    values: [set_id],
+  });
+
+  const deleteResultsQuery = new ParameterizedQuery({
+    text: "DELETE FROM results WHERE set_id=$1",
+    values: [set_id],
+  });
+  const deleteLikesQuery = new ParameterizedQuery({
+    text: "DELETE FROM likes WHERE set_id=$1",
+    values: [set_id],
+  });
+
+  return db
+    .none(deleteLikesQuery)
+    .then(() => {
+      db.none(deleteResultsQuery)
+        .then(() => {
+          db.none(deleteCardsQuery)
+            .then(() => {
+              db.none(deleteSetQuery)
+                .then(() => {
+                  return true;
+                })
+                .catch((e) => {
+                  console.log(e);
+                  return false;
+                });
+            })
+            .catch((e) => {
+              console.log(e);
+              return false;
+            });
+        })
+        .catch((e) => {
+          console.log(e);
+          return false;
+        });
+    })
+    .catch((e) => {
+      console.log(e);
+      return false;
+    });
 }
 
 module.exports = {
@@ -401,4 +483,6 @@ module.exports = {
   getPublicSets,
   getMostLikedPublicSets,
   getUserInfo,
+  getOwnerOfSet,
+  deleteSet,
 };

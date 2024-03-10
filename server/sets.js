@@ -1,7 +1,13 @@
 const express = require("express");
 const setsRouter = express.Router();
 const jwt = require("jsonwebtoken");
-const { createSet } = require("./db");
+const {
+  createSet,
+  getOwnerOfSet,
+  getIdByUsername,
+  deleteSet,
+} = require("./db");
+const getUsernameByToken = require("./getUsernameByToken");
 require("dotenv").config({
   path: ".env",
 });
@@ -23,6 +29,23 @@ setsRouter.post("/", async (req, res) => {
     );
     res.json(response);
   });
+});
+
+setsRouter.delete("/", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const { setId } = req.query;
+  const ownerId = await getOwnerOfSet(setId);
+  const username = await getUsernameByToken(token);
+  const user_id = await getIdByUsername(username);
+
+  if (ownerId == user_id) {
+    deleteSet(setId);
+    console.log("deleted");
+    res.status(204).send("deleted");
+  } else {
+    res.status(401).send("no permission to delete this set");
+  }
 });
 
 module.exports = setsRouter;

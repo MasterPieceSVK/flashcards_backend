@@ -23,11 +23,9 @@ dashboardRouter.post("/", async (req, res) => {
     }
     // console.log(req.body);
     if (searchForSets) {
-      console.log("search for sets");
       const sets = (await getFlashcardSets(decoded.username)) || [];
       res.json({ username: decoded.username, sets });
     } else {
-      console.log("success");
       res.json({ username: decoded.username });
     }
 
